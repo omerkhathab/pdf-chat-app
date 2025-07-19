@@ -1,4 +1,5 @@
-from utils import os, generate_response
+from utils import generate_response
+import os
 import shutil
 import streamlit as st
 

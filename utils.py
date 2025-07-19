@@ -1,7 +1,7 @@
-import pypdf
 from dotenv import load_dotenv
 import os
-# from langchain_community.document_loaders import UnstructuredPDFLoader
+import tempfile
+from langchain_community.document_loaders import UnstructuredPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
@@ -18,22 +18,29 @@ def generate_chunks(files):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1250, chunk_overlap=250)
 
     for file in files:
-        reader = pypdf.PdfReader(file)
-        filename = file.name
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+            tmp_file.write(file.read())
+            tmp_file_path = tmp_file.name
 
-        for page_num, page in enumerate(reader.pages):
-            text = page.extract_text()
-            if not text:
-                continue
+        loader = UnstructuredPDFLoader(tmp_file_path)
+        try:
+            docs = loader.load()
+        except Exception as e:
+            print(f"Failed to load PDF {file.name}: {e}")
+            continue
+        finally:
+            os.remove(tmp_file_path)
 
-            chunks = text_splitter.split_text(text)
+        for page_num, doc in enumerate(docs, start=1):
+            chunks = text_splitter.split_text(doc.page_content)
 
             for chunk in chunks:
                 all_chunks.append({
-                    "page_content" : chunk,
-                    "metadata" : {
-                        "source" : filename,
-                        "page" : page_num + 1
+                    "page_content": chunk,
+                    "metadata": {
+                        **doc.metadata,
+                        "source": file.name,
+                        "page": page_num
                     }
                 })
 
